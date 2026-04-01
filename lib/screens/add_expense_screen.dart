@@ -1,52 +1,73 @@
 import 'package:flutter/material.dart';
 import '../models/expense.dart';
+import '../utils/toast_helper.dart';
 
 class AddExpenseScreen extends StatefulWidget {
-  const AddExpenseScreen({super.key, required this.onAddExpense});
+  const AddExpenseScreen({
+    super.key,
+    required this.onAddExpense,
+    this.expenseToEdit,        // optional — only passed when editing
+    this.onEditExpense,        // optional — only passed when editing
+  });
 
   final void Function(Expense expense) onAddExpense;
+  final Expense? expenseToEdit;                          // null = adding, not null = editing
+  final void Function(Expense expense)? onEditExpense;
 
   @override
   State<AddExpenseScreen> createState() => _AddExpenseScreenState();
 }
 
 class _AddExpenseScreenState extends State<AddExpenseScreen> {
-  final _titleController = TextEditingController();
-  final _amountController = TextEditingController();
+  late final TextEditingController _titleController;
+  late final TextEditingController _amountController;
   DateTime? _selectedDate;
   Category _selectedCategory = Category.food;
 
-  // Open date picker
+  @override
+  void initState() {
+    super.initState();
+
+    // If editing, pre-fill the form with existing expense data
+    if (widget.expenseToEdit != null) {
+      final e = widget.expenseToEdit!;
+      _titleController  = TextEditingController(text: e.title);
+      _amountController = TextEditingController(text: e.amount.toString());
+      _selectedDate     = e.date;
+      _selectedCategory = e.category;
+    } else {
+      // Adding new — start empty
+      _titleController  = TextEditingController();
+      _amountController = TextEditingController();
+    }
+  }
+
   void _pickDate() async {
     final now = DateTime.now();
     final picked = await showDatePicker(
       context: context,
-      initialDate: now,
+      initialDate: _selectedDate ?? now,
       firstDate: DateTime(now.year - 1),
       lastDate: now,
     );
     if (picked != null) {
-      setState(() {
-        _selectedDate = picked;
-      });
+      setState(() => _selectedDate = picked);
     }
   }
 
-  // Validate and submit
   void _submitExpense() {
     final amount = double.tryParse(_amountController.text);
-    final titleIsInvalid = _titleController.text.trim().isEmpty;
+    final titleIsInvalid  = _titleController.text.trim().isEmpty;
     final amountIsInvalid = amount == null || amount <= 0;
-    final dateIsInvalid = _selectedDate == null;
+    final dateIsInvalid   = _selectedDate == null;
 
     if (titleIsInvalid || amountIsInvalid || dateIsInvalid) {
+        ToastHelper.error('Please fill all fields correctly');
       showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
           title: const Text('Invalid input'),
-          content: const Text(
-            'Please enter a valid title, amount, and date.',
-          ),
+          content: const Text('Please enter a valid title, amount, and date.'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx),
@@ -58,16 +79,25 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
       return;
     }
 
-    widget.onAddExpense(
-      Expense(
-        title: _titleController.text.trim(),
-        amount: amount,
-        date: _selectedDate!,
-        category: _selectedCategory,
-      ),
+    // Build the updated/new expense
+    final expense = Expense(
+      id: widget.expenseToEdit?.id,   // keep same ID if editing
+      title: _titleController.text.trim(),
+      amount: amount,
+      date: _selectedDate!,
+      category: _selectedCategory,
     );
 
-    Navigator.pop(context);
+    if (widget.expenseToEdit != null) {
+      widget.onEditExpense!(expense);  // editing
+    } else {
+      widget.onAddExpense(expense);    // adding new
+    }
+
+    ToastHelper.success(
+  _isEditing ? 'Expense updated!' : 'Expense added!'
+);
+Navigator.pop(context);
   }
 
   @override
@@ -77,23 +107,24 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
     super.dispose();
   }
 
+  // Are we editing or adding?
+  bool get _isEditing => widget.expenseToEdit != null;
+
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.fromLTRB(
-        16,
-        16,
-        16,
-        MediaQuery.of(context).viewInsets.bottom + 16, // moves form above keyboard
+        16, 16, 16,
+        MediaQuery.of(context).viewInsets.bottom + 16,
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
-          const Text(
-            'Add Expense',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          // Header changes based on add vs edit
+          Text(
+            _isEditing ? 'Edit Expense' : 'Add Expense',
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 16),
 
@@ -120,7 +151,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
           ),
           const SizedBox(height: 16),
 
-          // Date picker row
+          // Date picker
           Row(
             children: [
               Text(
@@ -146,22 +177,21 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               labelText: 'Category',
               border: OutlineInputBorder(),
             ),
-            items: Category.values.map((cat) {
-              return DropdownMenuItem(
-                value: cat,
-                child: Row(
-                  children: [
-                    Icon(categoryIcons[cat], size: 20),
-                    const SizedBox(width: 8),
-                    Text(cat.name[0].toUpperCase() + cat.name.substring(1)),
-                  ],
-                ),
-              );
-            }).toList(),
+items: Category.values.map((cat) {
+  return DropdownMenuItem(
+    value: cat,
+    child: Row(
+      children: [
+        Icon(categoryIcons[cat],
+            size: 20, color: categoryColors[cat]),
+        const SizedBox(width: 8),
+        Text(categoryNames[cat] ?? cat.name),
+      ],
+    ),
+  );
+}).toList(),
             onChanged: (value) {
-              if (value != null) {
-                setState(() => _selectedCategory = value);
-              }
+              if (value != null) setState(() => _selectedCategory = value);
             },
           ),
           const SizedBox(height: 20),
@@ -177,7 +207,7 @@ class _AddExpenseScreenState extends State<AddExpenseScreen> {
               const SizedBox(width: 8),
               ElevatedButton(
                 onPressed: _submitExpense,
-                child: const Text('Add Expense'),
+                child: Text(_isEditing ? 'Save Changes' : 'Add Expense'),
               ),
             ],
           ),

@@ -1,16 +1,33 @@
 import 'package:flutter/material.dart';
-import 'package:hive/hive.dart';
 import 'package:uuid/uuid.dart';
 
 const uuid = Uuid();
 
-enum Category { food, travel, shopping, bills, other }
+enum Category {
+  food,
+  travel,
+  shopping,
+  bills,
+  entertainment,
+  fuel,
+  health,
+  grocery,
+  recharge,
+  emi,
+  other
+}
 
 const categoryIcons = {
   Category.food: Icons.restaurant,
   Category.travel: Icons.flight,
   Category.shopping: Icons.shopping_bag,
   Category.bills: Icons.receipt_long,
+  Category.entertainment: Icons.movie,
+  Category.fuel: Icons.local_gas_station,
+  Category.health: Icons.medical_services,
+  Category.grocery: Icons.local_grocery_store,
+  Category.recharge: Icons.phone_android,
+  Category.emi: Icons.account_balance,
   Category.other: Icons.attach_money,
 };
 
@@ -19,7 +36,28 @@ const categoryColors = {
   Category.travel: Colors.blue,
   Category.shopping: Colors.pink,
   Category.bills: Colors.purple,
-  Category.other: Colors.teal,
+  Category.entertainment: Colors.red,
+  Category.fuel: Colors.brown,
+  Category.health: Colors.green,
+  Category.grocery: Colors.teal,
+  Category.recharge: Colors.indigo,
+  Category.emi: Colors.deepOrange,
+  Category.other: Colors.blueGrey,
+};
+
+// Human readable names for each category
+const categoryNames = {
+  Category.food:          'Food',
+  Category.travel:        'Travel',
+  Category.shopping:      'Shopping',
+  Category.bills:         'Bills',
+  Category.entertainment: 'Entertainment',
+  Category.fuel:          'Fuel & Transport',
+  Category.health:        'Health & Medical',
+  Category.grocery:       'Grocery',
+  Category.recharge:      'Recharge & Bills',
+  Category.emi:           'EMI & Loans',
+  Category.other:         'Other',
 };
 
 class Expense {
@@ -41,7 +79,9 @@ class Expense {
     return '${date.day}/${date.month}/${date.year}';
   }
 
-  // Convert to Map to save in Hive
+  // Get display name for category
+  String get categoryName => categoryNames[category] ?? category.name;
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -52,15 +92,15 @@ class Expense {
     };
   }
 
-  // Create Expense from saved Map
   factory Expense.fromMap(Map<dynamic, dynamic> map) {
     return Expense(
-      id: map['id'],
-      title: map['title'],
-      amount: map['amount'],
-      date: DateTime.parse(map['date']),
+      id: map['id'] as String,
+      title: map['title'] as String,
+      amount: (map['amount'] as num).toDouble(),
+      date: DateTime.parse(map['date'] as String),
       category: Category.values.firstWhere(
         (c) => c.name == map['category'],
+        orElse: () => Category.other, // fallback for old data
       ),
     );
   }
